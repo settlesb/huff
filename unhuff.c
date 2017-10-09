@@ -14,15 +14,11 @@ typedef struct fList
   int f,c_val;
   struct fList *next;
 } Node;
-TN * Header(FILE * iptr);
-LN * MergeLN(int type, LN * head); 
 LN * LN_create(TN * tn);
 LN * LN_insert(LN * head, LN * win, int type); 
 void freeT(TN * node);
-TN * TN_create(int amount_val, int c_val);
 TN * T_merge(TN * tn1, TN * tn2);
 int Bit(FILE * fptr, unsigned char * bit, unsigned char * wbit, unsigned char * cbyte);
-int decompress(char * ofile, char * ifile);
 
 int main(int argc, char **argv)
 {
@@ -31,14 +27,12 @@ int main(int argc, char **argv)
   char * ofile = (char *)malloc(filename_size+7 * sizeof(char));
   strcpy(ofile, filename);
   ofile = strcat(ofile, ".unhuff");
-  decompress(ofile,filename);
-  return 0;
-}
-TN * Header(FILE * iptr)
-{
-  int quit = 0, bitc;
+  FILE * iptr = fopen(filename, "r");
+  FILE * outfptr = fopen(ofile, "w");
+  int quit = 0, bitc, end=1;
   unsigned char wbit = 0, cbyte = 0, bit1 = 0, val = 0;
   LN * head = NULL;
+  //reads header
   while(quit == 0)
   {
     Bit(iptr, &bit1, &wbit, &cbyte);
@@ -51,7 +45,12 @@ TN * Header(FILE * iptr)
         Bit(iptr, &bit1, &wbit, &cbyte);
         val += bit1;
       }
-      TN * tn = TN_create(0,val);
+      TN * node = malloc(sizeof(TN));
+      node -> left = NULL;
+      node -> right = NULL;
+      node -> charac = val;
+      node -> amount = 0;
+      TN * tn = node;
       LN * win = LN_create(tn);
       head = LN_insert(head, win, 1);
     }
@@ -63,39 +62,60 @@ TN * Header(FILE * iptr)
       }
       else
       {
-        head = MergeLN(1, head);
+        LN * sec = head -> next,* thi = sec -> next;
+        TN * tn2 = sec -> T_ptr, *finale, * tn1 = head -> T_ptr;
+        free(head);
+        free(sec);
+        head = thi;
+        if (end == 0)
+        {
+          finale = T_merge(tn1, tn2);
+        }
+        else
+        {
+          finale = T_merge(tn2, tn1);
+        }
+        LN * win = LN_create(finale);
+        if (end == 0)
+        {
+          head = LN_insert(head, win, 2);
+        }
+        else
+        {
+          head = LN_insert(head, win, 1);
+        }
       }
     }
   }
   TN * rot = head -> T_ptr;
   free(head);
-  return rot;
-}
-LN * MergeLN(int end,LN * head)
-{
-  LN * sec = head -> next,* thi = sec -> next;
-  TN * tn2 = sec -> T_ptr, *finale, * tn1 = head -> T_ptr;
-  free(head);
-  free(sec);
-  head = thi;
-  if (end == 0)
+  unsigned int numChar = 0;
+  unsigned char newline;
+  wbit = 0; bit1 = 0; cbyte = 0;
+  fread(&numChar, sizeof(unsigned int), 1, iptr);
+  fread(&newline, sizeof(unsigned char), 1, iptr);
+  while(numChar != 0) //reads characters
   {
-    finale = T_merge(tn1, tn2);
+    TN * tn = rot;
+    while ((tn -> left) != NULL)
+    {
+      Bit(iptr, &bit1, &wbit, &cbyte);
+      if(bit1 == 0)
+      {
+        tn = tn -> left;
+      }
+      else
+      {
+        tn = tn -> right;
+      }
+    }
+    fprintf(outfptr, "%c", tn -> charac);
+    --numChar;
   }
-  else
-  {
-    finale = T_merge(tn2, tn1);
-  }
-  LN * win = LN_create(finale);
-  if (end == 0)
-  {
-    head = LN_insert(head, win, 2);
-  }
-  else
-  {
-    head = LN_insert(head, win, 1);
-  }
-  return head;
+  freeT(rot);
+  fclose(iptr);
+  fclose(outfptr);
+  return 0;
 }
 LN * LN_insert(LN * head, LN * win, int type)
 {
@@ -129,15 +149,6 @@ LN * LN_create(TN * tn)
   win -> next = NULL;
   return win;
 }
-TN * TN_create(int amount_val,int c_val)
-{
-  TN * node = malloc(sizeof(TN));
-  node -> left = NULL;
-  node -> right = NULL;
-  node -> charac = c_val;
-  node -> amount = amount_val;
-  return node;
-}
 TN * T_merge(TN * tn1, TN * tn2)
 {
   TN * tn = malloc(sizeof(TN));
@@ -146,38 +157,6 @@ TN * T_merge(TN * tn1, TN * tn2)
   tn -> left = tn1;
   tn -> charac = 0;
   return tn;
-}
-int decompress(char * ofile, char * ifile)
-{
-  FILE * iptr = fopen(ifile, "r");
-  FILE * outfptr = fopen(ofile, "w");
-  TN * rot = Header(iptr);
-  unsigned int numChar = 0;
-  unsigned char newline, wbit = 0, bit1 = 0, cbyte = 0;
-  fread(&numChar, sizeof(unsigned int), 1, iptr);
-  fread(&newline, sizeof(unsigned char), 1, iptr);
-  while(numChar != 0)
-  {
-    TN * tn = rot;
-    while ((tn -> left) != NULL)
-    {
-      Bit(iptr, &bit1, &wbit, &cbyte);
-      if(bit1 == 0)
-      {
-        tn = tn -> left;
-      }
-      else
-      {
-        tn = tn -> right;
-      }
-    }
-    fprintf(outfptr, "%c", tn -> charac);
-    --numChar;
-  }
-  freeT(rot);
-  fclose(iptr);
-  fclose(outfptr);
-  return 0;
 }
 void freeT(TN * node)
 {

@@ -14,53 +14,100 @@ typedef struct LN{
   struct LN * nxt;
   TN * T_ptr;
 } LN;
-void frequency(char *file, int * freq);
 int pad(FILE * fp, unsigned char * wbit, unsigned char * cbyte);
 int heightHelp(TN * tn, int height);
-Node * Linsert(Node * head, int value, int i);
+Node * Linsert(Node * head, int value, int i); 
 void Lfree(Node * head);
 void binaryhelp(TN * tn, int ** bin, int * row, int column);
 Node * Lcreate(int value, int i);
-Node * Lmake(int * freqs);
-void binary(int ** bin,TN * rot);
 LN * LN_create(TN * tn);
 LN * LN_insert(LN * head, LN * wn);
-LN * LN_make(Node * fList);
 void Tfree(TN * node);
-TN * TNcreate(int val, int w_val);
 void TLhelp(TN * tn, int * num);
 void headhelp(TN * tn, FILE * outfp, unsigned char * wbit, unsigned char * cbyte);
-void head(TN * tn, char * file, unsigned int nchar); //TN * tn, unsigned int nchar, char * file
-int TL(TN * tn);
-TN * T_merge(TN * tn1, TN * tn2);
 int Bit(FILE * fp, unsigned char bit, unsigned char * wbit, unsigned char * cbyte);
-void cbits(FILE * outfp, int ch, unsigned char * cbyte, unsigned char * wbit); 
 int huff(char * ifile, char * ofile, int * m, int ** bin); 
 int main(int argc, char **argv)
 {
   char * f = argv[1];
-  int array[127], filesize = strlen(f);
+  int array[127], filesize = strlen(f),num = 0, r=0;;
   char * ofile = malloc(filesize+5 * sizeof(char));
-  frequency(f, array);
+  //map frequencies
+  int i,z2 = 0,ind;;
+  FILE * fp = fopen(f, "r"); 
+  for(i = 0; i < 127; ++i) 
+  {
+    array[i] = 0;
+  }
+  while (1) 
+  {
+    i = fgetc(fp);
+    if(i == EOF)
+    {
+      break;
+    }
+    ++array[i]; 
+  }
+  fclose(fp); 
+  //change output filename
   strcpy(ofile, f);
   ofile = strcat(ofile, ".huff");
-  Node * list = Lmake(array);
-  LN * T_list = LN_make(list);
+  //creating list of frequencies
+  Node * ln;
+  while(array[z2] == 0)
+  {
+    ++z2;
+  }
+  ln = Lcreate(z2, array[z2]);
+  ++z2;
+  ind = z2;
+  while(ind < 127)
+  { 
+    if (0<array[ind])
+    {
+      ln = Linsert(ln, ind, array[ind]);
+    }
+    ++ind;
+  }
+  Node * list = ln;
+  //creates nodes from frequencies
+  LN * headn = NULL;
+  while(list != NULL)
+  {
+    TN * node = malloc(sizeof(TN));
+    node -> left = NULL;
+    node -> right = NULL;
+    node -> charac = list -> val;
+    node -> w = list -> freq;
+    TN * tn = node;
+    LN * wn = LN_create(tn);
+    headn = LN_insert(headn, wn);
+    list = list -> nxt;
+  }
+  LN * T_list = headn;
+  TN * rot;
   while(T_list -> nxt != NULL)
   {
-    LN * sec = T_list -> nxt,* th = sec -> nxt;
-    TN * tn1 = T_list -> T_ptr,* tn2 = sec -> T_ptr;
+    LN * sec = T_list -> nxt,* th = sec -> nxt, * wn;
+    TN * tn1 = T_list -> T_ptr,* tn2 = sec -> T_ptr, *fin;
     free(sec);
     free(T_list);
     T_list = th;
-    TN * fin = T_merge(tn1, tn2);
-    LN * wn = LN_create(fin);
+    //merges treenodes
+    TN * tn = malloc(sizeof(TN));
+    tn -> left = tn1;
+    tn -> charac = 0;
+    tn -> right = tn2;
+    tn -> w = (tn1 -> w) + (tn2 -> w);
+    fin = tn;
+    wn = LN_create(fin);
     T_list = LN_insert(T_list, wn);
   }
-  TN * rot = T_list -> T_ptr; 
+  rot = T_list -> T_ptr; 
   Lfree(list);
   free(T_list);
-  int Rows = TL(rot), row,Columns = heightHelp(rot,0)+1,** bin, column,z, ix, m[127], ix2;
+  TLhelp(rot, &num);
+  int Rows = num,row,Columns = heightHelp(rot,0)+1,** bin, column,z, ix, m[127], ix2;
   unsigned int nchar = 0;
   bin = malloc(sizeof(int*) * Rows);
   for(row = 0; row < Rows; ++row)
@@ -71,7 +118,7 @@ int main(int argc, char **argv)
       bin[row][column] = -1;
     }
   }
-  binary(bin,rot);
+  binaryhelp(rot, bin, &r, 1);
   for(z = 0; z < 127; ++z)
   {
     nchar += array[z];
@@ -87,7 +134,16 @@ int main(int argc, char **argv)
       }
     }
   }
-  head(rot, ofile, nchar);
+  //creates header
+  FILE * outfp = fopen(ofile, "w");
+  unsigned char wbit = 0,cbyte = 0,new = '\n';
+  headhelp(rot, outfp, &wbit, &cbyte);
+  Bit(outfp, 0, &wbit, &cbyte);
+  pad(outfp, &wbit, &cbyte);
+  fwrite(&nchar, sizeof(unsigned int), 1, outfp);
+  fwrite(&new, sizeof(unsigned char), 1, outfp);
+  fclose(outfp);
+  //encodes
   huff(f, ofile, m,bin);
   return 0;
 }
@@ -115,25 +171,6 @@ int huff(char * ifile, char * ofile, int *m, int ** bin)
   fclose(infp);
   return 0;
 }
-TN * TNcreate(int val, int w_val)
-{
-  TN * node = malloc(sizeof(TN));
-  node -> left = NULL;
-  node -> right = NULL;
-  node -> charac = val;
-  node -> w = w_val;
-  return node;
-}
-//merges TNs
-TN * T_merge(TN * tn1, TN * tn2)
-{
-  TN * tn = malloc(sizeof(TN));
-  tn -> left = tn1;
-  tn -> charac = 0;
-  tn -> right = tn2;
-  tn -> w = (tn1 -> w) + (tn2 -> w);
-  return tn;
-}
 LN * LN_create(TN * tn)
 {
   LN * wn = malloc(sizeof(LN));
@@ -155,19 +192,6 @@ LN * LN_insert(LN * head, LN * wn)
     return wn;
   }
   head -> nxt = LN_insert(head -> nxt, wn);
-  return head;
-}
-//creates nodes from freqs
-LN * LN_make(Node * fList)
-{
-  LN * head = NULL;
-  while(fList != NULL)
-  {
-    TN * tn = TNcreate(fList -> val, fList -> freq);
-    LN * wn = LN_create(tn);
-    head = LN_insert(head, wn);
-    fList = fList -> nxt;
-  }
   return head;
 }
 int heightHelp(TN * tn, int height)
@@ -204,12 +228,6 @@ void TLhelp(TN * tn, int * num)
   TLhelp(lc, num);
   TLhelp(rc, num);
 }
-int TL(TN * tn)
-{
-  int num = 0;
-  TLhelp(tn, &num);
-  return num;
-}
 void binaryhelp(TN * tn, int ** bin, int * row, int column)
 {
   if (tn == NULL)
@@ -226,8 +244,9 @@ void binaryhelp(TN * tn, int ** bin, int * row, int column)
   }
   if(lc != NULL)
   {
-    int Rows = TL(lc);
-    int ix;
+    int num = 0;
+    TLhelp(lc, &num);
+    int Rows = num, ix;
     for(ix = * row; ix < (*row) + Rows; ++ix)
     {
       bin[ix][column] = 0;
@@ -236,27 +255,14 @@ void binaryhelp(TN * tn, int ** bin, int * row, int column)
   }
   if(rc != NULL)
   {
-    int Rows = TL(rc);
-    int ix;
+    int num = 0;
+    TLhelp(rc, &num);
+    int Rows = num,ix;
     for(ix = *row; ix < (*row) + Rows; ++ix)
     {
       bin[ix][column] = 1;
     }
     binaryhelp(rc, bin, row, column + 1);
-  }
-}
-void binary(int ** bin,TN * rot)
-{
-  int r = 0;
-  binaryhelp(rot, bin, &r, 1);
-}
-void cbits(FILE * outfp, int ch, unsigned char * cbyte, unsigned char * wbit)
-{
-  unsigned char m = '@'; 
-  while(0 < m)
-  {
-    Bit(outfp, (ch & m) == m, wbit, cbyte);
-    m >>= 1;
   }
 }
 int Bit(FILE * fp, unsigned char bit, unsigned char * wbit, unsigned char * cbyte)
@@ -294,23 +300,18 @@ void headhelp(TN * tn, FILE * outfp, unsigned char * wbit, unsigned char * cbyte
   if((lc == NULL) && (rc == NULL))
   {
     Bit(outfp, 1, wbit, cbyte);
-    cbits(outfp, tn -> charac, cbyte,wbit);
+    int ch = tn -> charac;
+    unsigned char m = '@'; 
+    while(0 < m)
+    {
+      Bit(outfp, (ch & m) == m, wbit, cbyte);
+      m >>= 1;
+    }
     return;
   }
   headhelp(lc, outfp, wbit, cbyte);
   headhelp(rc, outfp, wbit, cbyte);
   Bit(outfp, 0, wbit, cbyte);
-}
-void head(TN * tn, char * file, unsigned int nchar)
-{
-  FILE * outfp = fopen(file, "w");
-  unsigned char wbit = 0,cbyte = 0,new = '\n';
-  headhelp(tn, outfp, &wbit, &cbyte);
-  Bit(outfp, 0, &wbit, &cbyte);
-  pad(outfp, &wbit, &cbyte);
-  fwrite(&nchar, sizeof(unsigned int), 1, outfp);
-  fwrite(&new, sizeof(unsigned char), 1, outfp);
-  fclose(outfp);
 }
 int pad(FILE * fp, unsigned char * wbit, unsigned char * cbyte)
 {
@@ -325,47 +326,6 @@ int pad(FILE * fp, unsigned char * wbit, unsigned char * cbyte)
   }
   return r;
 }
-void frequency(char *file, int * freq)
-{
-  int i;
-  FILE * fp = fopen(file, "r"); 
-  for(i = 0; i < 127; ++i) 
-  {
-    freq[i] = 0;
-  }
-  while (1) 
-  {
-    i = fgetc(fp);
-    if(i == EOF)
-    {
-      break;
-    }
-    ++freq[i]; 
-  }
-  fclose(fp); 
-}
-//creates list of freqs
-Node * Lmake(int * freqs)
-{
-  int z = 0,i;
-  Node * ln;
-  while(freqs[z] == 0)
-  {
-    ++z;
-  }
-  ln = Lcreate(z, freqs[z]);
-  ++z;
-  i = z;
-  while(i < 127)
-  { 
-    if (0<freqs[i])
-    {
-      ln = Linsert(ln, i, freqs[i]);
-    }
-    ++i;
-  }
-  return ln;
-}
 Node * Lcreate(int value, int i)
 {
   Node * ln = malloc(sizeof(Node));
@@ -375,7 +335,7 @@ Node * Lcreate(int value, int i)
   return ln;
 }
 //sort list
-Node * Linsert(Node * head, int value, int i)
+Node * Linsert(Node * head, int value, int i) 
 {
   Node * tmp,* pres;
   if (head == NULL || head -> freq >= i)
